@@ -17,8 +17,7 @@ An interactive series of ink drawings of a cat, each rebuilt from tens of thousa
 | `1` `2` `3` `4` | Force mode: Repel · Vortex · Gravity · Wind |
 | `Space` | Scatter everything, then let it reform |
 | `←` `→` | Previous / next drawing (particles morph between them) |
-| Rest the cursor on her (or hold a finger) | She settles and purrs, and little ink hearts float up |
-| Linger on her face | A slow blink (how cats say they trust you) |
+| Rest the cursor on her (or hold a finger) | She settles and purrs |
 | Brush past an ear | The ear twitches |
 
 The radius and strength sliders tune the force. The density slider (25–250%) rebuilds the drawing with fewer or more particles: low is a loose, airy scatter, and high gets close to the original pen drawing.
@@ -61,8 +60,9 @@ Drop the image in `assets/` and add an entry to the `scenes` array near the top 
 | `gamma` | Tone curve for sampling. Lower brings out light hatching; raise it (about 1.5) for drawings with a lot of dark fill |
 | `density` | Particle-count multiplier. Raise it for darker drawings |
 | `glyphSize` | Kanji size as a share of the drawing's height. About 0.27 for two characters, 0.36 for one |
+| `glyphNudge` | Optional. Moves the kanji right by this share of the drawing's height after it's placed, so it can tuck over faint fur like a tail; anything it covers is cleared |
 | `glyphY` | Vertical center of the kanji as a share of the drawing's height (0.5 = centered) |
-| `eyes` | Two ellipses `{ u, v, rx, ry }` used for the slow blink: center and radii as fractions of the drawing's width (`u`, `rx`) and height (`v`, `ry`) |
+| `eyes` | Two ellipses `{ u, v, rx, ry }` used for her random slow blinks: center and radii as fractions of the drawing's width (`u`, `rx`) and height (`v`, `ry`) |
 | `ears` | Two ears `{ pu, pv, tu, tv, w }` used for the twitch: base point, tip point, and half-width, as fractions of the drawing |
 
 The kanji is placed to the left of the drawing and slid right automatically until it's about 10px from her body, so you don't have to set it horizontally.

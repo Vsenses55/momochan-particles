@@ -77,7 +77,7 @@
   const ctx = canvas.getContext('2d');
   // ---------- the series ----------
   const scenes = [
-    { src: 'assets/cat-01.jpg', glyphs: ['希', '望'], reading: 'kibō · hope', gamma: 0.85, density: 1,   glyphSize: 0.27, glyphY: 0.5,
+    { src: 'assets/cat-01.jpg', glyphs: ['希', '望'], reading: 'kibō · hope', gamma: 0.85, density: 1,   glyphSize: 0.27, glyphY: 0.5, glyphNudge: 0.075,
       eyes: [{ u: .48, v: .276, rx: .05, ry: .032 }, { u: .685, v: .315, rx: .05, ry: .03 }],
       ears: [{ pu: .44, pv: .215, tu: .44, tv: .035, w: .085 }, { pu: .745, pv: .25, tu: .925, tv: .135, w: .075 }] },
     { src: 'assets/cat-02.jpg', glyphs: ['愛'],       reading: 'ai · love',  gamma: 1.5,  density: 1.7, glyphSize: 0.36, glyphY: 0.4,
@@ -210,7 +210,7 @@
         else cnt = Math.max(0, cnt - 1);
       }
     }
-    let cx = cx0 + (minGap < Infinity ? minGap - gap : 0);
+    let cx = cx0 + (minGap < Infinity ? minGap - gap : 0) + (scenes[cur].glyphNudge || 0) * dh;
     gL += cx - cx0;
 
     // her ink bounds (ignoring stray specks)
@@ -326,7 +326,7 @@
         }
       }
     }
-    purr = 0; stillT = 0; faceT = 0; blinkT = -1; hearts.length = 0;
+    purr = 0; stillT = 0; faceT = 0; blinkT = -1; blinkCool = 1.5 + Math.random() * 2; hearts.length = 0;
   }
   function onCat(x, y) {
     if (!catGrid) return false;
@@ -358,7 +358,7 @@
     stillT = over && sp < 2.2 * scale ? stillT + dt : Math.max(0, stillT - dt * 4);
     const target = Math.min(1, Math.max(0, (stillT - 0.3) / 0.6));
     purr += (target - purr) * Math.min(1, dt * (target > purr ? 4 : 6));
-    if (purr > 0.55) {
+    if (false) {
       heartClock -= dt;
       if (heartClock <= 0) {
         spawnHeart(pointer.x + (Math.random() - 0.5) * 50 * scale, pointer.y - (14 + Math.random() * 18) * scale);
@@ -379,7 +379,7 @@
       faceT = onFace ? faceT + dt : 0;
     } else faceT = 0;
     blinkCool -= dt;
-    if (blinkT < 0 && faceT > 1.5 && blinkCool <= 0) { blinkT = 0; blinkCool = 3.2; }
+    if (blinkT < 0 && blinkCool <= 0) { blinkT = 0; blinkCool = 3.5 + Math.random() * 5; }
     if (blinkT >= 0) { blinkT += dt; if (blinkT > 1.4) blinkT = -1; }
     // ear twitch: brush past an ear
     feat.ears.forEach((A, e) => {
