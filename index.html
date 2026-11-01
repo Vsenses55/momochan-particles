@@ -78,7 +78,7 @@
   // ---------- the series ----------
   const scenes = [
     { src: 'assets/cat-01.jpg', glyphs: ['希', '望'], reading: 'kibō · hope', gamma: 0.85, density: 1,   glyphSize: 0.27, glyphY: 0.5, glyphNudge: 0.075,
-      eyes: [{ u: .48, v: .276, rx: .05, ry: .032 }, { u: .685, v: .315, rx: .05, ry: .03 }],
+      eyes: [{ u: .48, v: .276, rx: .05, ry: .032, tilt: 15 }, { u: .685, v: .315, rx: .05, ry: .03 }],
       ears: [{ pu: .44, pv: .215, tu: .44, tv: .035, w: .085 }, { pu: .745, pv: .25, tu: .925, tv: .135, w: .075 }] },
     { src: 'assets/cat-02.jpg', glyphs: ['愛'],       reading: 'ai · love',  gamma: 1.5,  density: 1.7, glyphSize: 0.36, glyphY: 0.4,
       eyes: [{ u: .558, v: .428, rx: .042, ry: .025 }, { u: .722, v: .464, rx: .044, ry: .023 }],
@@ -299,7 +299,7 @@
   function tagFeatures(ox, oy, dw, dh) {
     const sc = scenes[cur];
     part = new Uint8Array(N); partW = new Float32Array(N);
-    feat.eyes = sc.eyes.map(e => ({ x: ox + e.u * dw, y: oy + e.v * dh, rx: e.rx * dw, ry: e.ry * dh }));
+    feat.eyes = sc.eyes.map(e => { const a = (e.tilt || 0) * Math.PI / 180; return { x: ox + e.u * dw, y: oy + e.v * dh, rx: e.rx * dw, ry: e.ry * dh, nx: -Math.sin(a), ny: Math.cos(a) }; });
     feat.ears = sc.ears.map(e => {
       const pxv = ox + e.pu * dw, pyv = oy + e.pv * dh, txv = ox + e.tu * dw, tyv = oy + e.tv * dh;
       const len = Math.hypot(txv - pxv, tyv - pyv);
@@ -510,7 +510,9 @@
       if (pf) {
         if (pf <= 2 && blink) {
           const E = feat.eyes[pf - 1];
-          ty = E.y + (ty - E.y) * (1 - blink * 0.9 * partW[i]);
+          // lids close onto a line through the eye, tilted to follow her head
+          const d = (tx - E.x) * E.nx + (ty - E.y) * E.ny, c = d * blink * 0.9 * partW[i];
+          tx -= E.nx * c; ty -= E.ny * c;
         } else if (pf >= 3) {
           const a = earAng[pf - 3] * partW[i];
           if (a) {
