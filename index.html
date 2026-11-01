@@ -171,7 +171,7 @@
         }
       }
     }
-    const catCount = tx.length;
+    let catCount = tx.length;
 
     // ---- the word, set over her in the same ink ----
     const glyphs = scenes[cur].glyphs;
@@ -189,7 +189,7 @@
       glyphs.forEach((g, n) => tctx.fillText(g, x, top + n * step));
     };
     // ---- layout: snug the kanji to her, then center the pair as one unit ----
-    const gap = dh * 0.04;                       // same breathing room for every drawing
+    const gap = dh * 0.03;                       // same breathing room for every drawing
     const run = Math.max(6, Math.round(7 * scale));
     const cx0 = fs * 0.6;
     drawGlyphs(cx0);
@@ -208,11 +208,6 @@
       for (let ix = 0; ix < sw; ix++) {
         if (weights[iy * sw + ix] > 0.14) { if (++cnt >= run) { minGap = Math.min(minGap, ox + ix - run + 1 - gr); break; } }
         else cnt = Math.max(0, cnt - 1);
-      }
-      let c2 = 0;
-      for (let ix = 0; ix < sw; ix++) {
-        if (weights[iy * sw + ix] > 0.12) { if (++c2 >= 2) { minGap = Math.min(minGap, ox + ix - gr + gap * 0.5); break; } }
-        else c2 = 0;
       }
     }
     let cx = cx0 + (minGap < Infinity ? minGap - gap : 0);
@@ -236,6 +231,21 @@
     ox += ddx; oy += ddy; cx += ddx; cy += ddy;
     drawGlyphs(cx);
     const td = tctx.getImageData(0, 0, W, H).data;
+
+    // the kanji clears its own space: faint wisps (tail tips) that would touch it are trimmed,
+    // with an irregular margin so the edge still looks hand-drawn
+    {
+      const hit = (x, y) => { x |= 0; y |= 0; return x >= 0 && y >= 0 && x < W && y < H && td[(y * W + x) * 4 + 3] > 40; };
+      const nx = [], ny = [], ni = [];
+      for (let i = 0; i < catCount; i++) {
+        const x = tx[i], y = ty[i], m = gap * (0.45 + Math.random() * 0.55);
+        if (hit(x, y) || hit(x - m, y) || hit(x - m * 0.7, y - m * 0.7) || hit(x - m * 0.7, y + m * 0.7) || hit(x, y - m) || hit(x, y + m)) continue;
+        nx.push(x); ny.push(y); ni.push(ti[i]);
+      }
+      tx.length = ty.length = ti.length = nx.length;
+      for (let i = 0; i < nx.length; i++) { tx[i] = nx[i]; ty[i] = ny[i]; ti[i] = ni[i]; }
+      catCount = tx.length;
+    }
     let area = 0;
     for (let j = 3; j < td.length; j += 16) if (td[j] > 128) area++;
     area *= 4;
@@ -254,20 +264,28 @@
     N = tx.length;
     px = new Float32Array(N); py = new Float32Array(N);
     vx = new Float32Array(N); vy = new Float32Array(N);
-    hx = new Float32Array(tx); hy = new Float32Array(ty);
-    ink = new Float32Array(ti);
-    isWord = new Uint8Array(N); isWord.fill(1, catCount);
-    tagFeatures(catCount, ox, oy, dw, dh);
+    // order particles top→bottom with a loose, noisy key, so a morph maps
+    // "same rough height" to "same rough height" with no hard seams
+    const order = new Uint32Array(N), key = new Float32Array(N);
+    for (let i = 0; i < N; i++) { order[i] = i; key[i] = ty[i] + (Math.random() - 0.5) * H * 0.22; }
+    order.sort((a, b) => key[a] - key[b]);
+    hx = new Float32Array(N); hy = new Float32Array(N); ink = new Float32Array(N); isWord = new Uint8Array(N);
+    for (let n = 0; n < N; n++) {
+      const o = order[n];
+      hx[n] = tx[o]; hy[n] = ty[o]; ink[n] = ti[o]; isWord[n] = o >= catCount ? 1 : 0;
+    }
+    tagFeatures(ox, oy, dw, dh);
     phase = new Float32Array(N); k = new Float32Array(N);
     for (let i = 0; i < N; i++) {
       phase[i] = Math.random() * Math.PI * 2;
       k[i] = 0.018 + Math.random() * 0.03;     // per-particle spring → organic reform
       if (snap) { px[i] = hx[i] + (Math.random() - 0.5) * 3; py[i] = hy[i] + (Math.random() - 0.5) * 3; }
-      else if (prevN && i < prevN) { px[i] = opx[i]; py[i] = opy[i]; }
       else if (prevN) {
-        // extra particles peel off the previous image
-        const j = (Math.random() * prevN) | 0;
-        px[i] = opx[j] + (Math.random() - 0.5) * 6; py[i] = opy[j] + (Math.random() - 0.5) * 6;
+        // each new particle peels off the matching place in the previous image
+        // (proportional mapping, so a change in count never leaves a band behind)
+        const j = Math.min(prevN - 1, Math.floor((i + Math.random()) * prevN / N));
+        px[i] = opx[j] + (Math.random() - 0.5) * 4; py[i] = opy[j] + (Math.random() - 0.5) * 4;
+        vx[i] = (Math.random() - 0.5) * scale; vy[i] = (Math.random() - 0.5) * scale;
       } else {
         // intro: drift in from a loose cloud
         const a = Math.random() * Math.PI * 2, r = (0.35 + Math.random() * 0.8) * Math.max(W, H) * 0.6;
@@ -278,7 +296,7 @@
       }
 
   // ---------- cute layer: eyes, ears, where her body is ----------
-  function tagFeatures(catCount, ox, oy, dw, dh) {
+  function tagFeatures(ox, oy, dw, dh) {
     const sc = scenes[cur];
     part = new Uint8Array(N); partW = new Float32Array(N);
     feat.eyes = sc.eyes.map(e => ({ x: ox + e.u * dw, y: oy + e.v * dh, rx: e.rx * dw, ry: e.ry * dh }));
@@ -289,7 +307,8 @@
     });
     gridCell = Math.max(8, Math.round(14 * scale)); gridW = Math.ceil(W / gridCell);
     catGrid = new Uint16Array(gridW * Math.ceil(H / gridCell));
-    for (let i = 0; i < catCount; i++) {
+    for (let i = 0; i < N; i++) {
+      if (isWord[i]) continue;
       const x = hx[i], y = hy[i];
       const gi = ((y / gridCell) | 0) * gridW + ((x / gridCell) | 0);
       if (gi >= 0 && gi < catGrid.length) catGrid[gi]++;
