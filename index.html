@@ -35,6 +35,7 @@
   .nav .reading{color:var(--muted);margin-right:10px;text-transform:none;letter-spacing:.04em}
   .nav button{width:34px;height:34px;padding:0;font-size:14px;display:grid;place-items:center}
   .hint-touch{display:none} @media (hover:none){.hint-fine{display:none}.hint-touch{display:inline}}
+  .val{color:var(--muted);min-width:42px}
   .loading{position:fixed;inset:0;display:grid;place-items:center;font-family:"Instrument Serif",serif;font-style:italic;font-size:28px;color:var(--muted);pointer-events:none;transition:opacity .6s}
   @media (max-width:700px){
     .title{top:18px;left:18px}.title h1{font-size:32px}.title p{display:none}
@@ -56,6 +57,7 @@
   </div>
   <div class="row"><span class="label">Radius</span><input id="radius" type="range" min="40" max="320" value="130"></div>
   <div class="row"><span class="label">Strength</span><input id="strength" type="range" min="1" max="100" value="45"></div>
+  <div class="row"><span class="label">Density</span><input id="density" type="range" min="25" max="250" step="5" value="100"><span class="val" id="densityVal">100%</span></div>
   <div class="row"><span class="label">Do</span>
     <button id="scatter">Scatter<kbd>space</kbd></button>
   </div>
@@ -97,7 +99,7 @@
   const hearts = []; let heartClock = 0;
   let imageData, buf32, buf8;
   let mode = 'repel';
-  let radius = 130, strength = 45;
+  let radius = 130, strength = 45, densityMul = 1;
   let springGain = 1;                         // ramps after scatter
   const pointer = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, active: false, down: false };
   let t = 0, last = performance.now(), fps = 60;
@@ -105,7 +107,7 @@
   const PAPER = [243, 239, 231];
 
   // ---------- build particles from image ----------
-  function build() {
+  function build(snap) {
     const cssW = innerWidth, cssH = innerHeight;
     const dpr = Math.min(devicePixelRatio || 1, 2);
     scale = Math.min(dpr, Math.sqrt(3.2e6 / (cssW * cssH)));
@@ -123,7 +125,7 @@
     let dh, dw, ox, oy;
     if (narrow) {
       // phone: cat + kanji side by side, sitting above the controls
-      const availH = H - 200 * scale - 24 * scale;
+      const availH = H - 240 * scale - 24 * scale;
       dh = Math.min(availH * 0.95, (W * 0.94) / (ar + KW));
       dw = dh * ar;
       ox = (W - (dw + dh * KW)) / 2 + dh * KW;
@@ -144,7 +146,7 @@
     const src = octx.getImageData(0, 0, sw, sh).data;
 
     // weight = darkness^gamma; choose density to hit a target count
-    const target = Math.round(Math.min(150000, Math.max(36000, (W * H) / 24 * scenes[cur].density)));
+    const target = Math.round(Math.min(150000, Math.max(36000, (W * H) / 24 * scenes[cur].density)) * densityMul);
     const weights = new Float32Array(sw * sh);
     let sum = 0;
     for (let i = 0, j = 0; i < weights.length; i++, j += 4) {
@@ -153,7 +155,7 @@
       d = Math.pow(d, scenes[cur].gamma);
       weights[i] = d; sum += d;
     }
-    const prob = Math.min(2.5, target / sum);
+    const prob = Math.min(5, target / sum);
     const tx = [], ty = [], ti = [];
     for (let y = 0; y < sh; y++) {
       for (let x = 0; x < sw; x++) {
@@ -227,7 +229,7 @@
     const top = Math.min(gT, oy + cT), bottom = Math.max(gB, oy + cB);
 
     // center within the free area (phones: between the nav and the controls)
-    const areaT = narrow ? 64 * scale : 0, areaB = narrow ? H - 210 * scale : H;
+    const areaT = narrow ? 64 * scale : 0, areaB = narrow ? H - 250 * scale : H;
     const ddx = W / 2 - (left + right) / 2;
     const ddy = (areaT + areaB) / 2 - (top + bottom) / 2;
     for (let i = 0; i < catCount; i++) { tx[i] += ddx; ty[i] += ddy; }
@@ -237,7 +239,7 @@
     let area = 0;
     for (let j = 3; j < td.length; j += 16) if (td[j] > 128) area++;
     area *= 4;
-    const tp = Math.min(0.6, (target / scenes[cur].density * 0.3) / Math.max(1, area));
+    const tp = Math.min(1, (target / scenes[cur].density * 0.3) / Math.max(1, area));
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const al = td[(y * W + x) * 4 + 3] / 255;
       // occlusion: the word thins out behind her fur so she sits in front of it
@@ -260,7 +262,8 @@
     for (let i = 0; i < N; i++) {
       phase[i] = Math.random() * Math.PI * 2;
       k[i] = 0.018 + Math.random() * 0.03;     // per-particle spring → organic reform
-      if (prevN && i < prevN) { px[i] = opx[i]; py[i] = opy[i]; }
+      if (snap) { px[i] = hx[i] + (Math.random() - 0.5) * 3; py[i] = hy[i] + (Math.random() - 0.5) * 3; }
+      else if (prevN && i < prevN) { px[i] = opx[i]; py[i] = opy[i]; }
       else if (prevN) {
         // extra particles peel off the previous image
         const j = (Math.random() * prevN) | 0;
@@ -442,6 +445,12 @@
   document.getElementById('next').addEventListener('click', () => go(1));
   document.getElementById('radius').addEventListener('input', e => radius = +e.target.value);
   document.getElementById('strength').addEventListener('input', e => strength = +e.target.value);
+  let dt_;
+  document.getElementById('density').addEventListener('input', e => {
+    densityMul = +e.target.value / 100;
+    document.getElementById('densityVal').textContent = e.target.value + '%';
+    clearTimeout(dt_); dt_ = setTimeout(() => build(true), 90);
+  });
   addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
     const map = { '1': 'repel', '2': 'vortex', '3': 'gravity', '4': 'wind' };
