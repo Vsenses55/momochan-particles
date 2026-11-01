@@ -17,6 +17,9 @@ An interactive series of ink drawings of a cat, each rebuilt from tens of thousa
 | `1` `2` `3` `4` | Force mode: Repel · Vortex · Gravity · Wind |
 | `Space` | Scatter everything, then let it reform |
 | `←` `→` | Previous / next drawing (particles morph between them) |
+| Rest the cursor on her (or hold a finger) | She settles and purrs, and little ink hearts float up |
+| Linger on her face | A slow blink (how cats say they trust you) |
+| Brush past an ear | The ear twitches |
 
 The radius and strength sliders tune the force.
 
@@ -46,7 +49,9 @@ Drop the image in `assets/` and add an entry to the `scenes` array near the top 
 
 ```js
 { src: 'assets/cat-03.jpg', glyphs: ['眠', 'い'], reading: 'nemui · sleepy',
-  gamma: 0.85, density: 1, glyphSize: 0.27, glyphY: 0.5 },
+  gamma: 0.85, density: 1, glyphSize: 0.27, glyphY: 0.5,
+  eyes: [{ u: .45, v: .30, rx: .05, ry: .03 }, { u: .62, v: .31, rx: .05, ry: .03 }],
+  ears: [{ pu: .40, pv: .22, tu: .38, tv: .06, w: .08 }, { pu: .68, pv: .22, tu: .74, tv: .07, w: .08 }] },
 ```
 
 | Field | What it does |
@@ -57,6 +62,8 @@ Drop the image in `assets/` and add an entry to the `scenes` array near the top 
 | `density` | Particle-count multiplier. Raise it for darker drawings |
 | `glyphSize` | Kanji size as a share of the drawing's height. About 0.27 for two characters, 0.36 for one |
 | `glyphY` | Vertical center of the kanji as a share of the drawing's height (0.5 = centered) |
+| `eyes` | Two ellipses `{ u, v, rx, ry }` used for the slow blink: center and radii as fractions of the drawing's width (`u`, `rx`) and height (`v`, `ry`) |
+| `ears` | Two ears `{ pu, pv, tu, tv, w }` used for the twitch: base point, tip point, and half-width, as fractions of the drawing |
 
 The kanji is placed to the left of the drawing and slid right automatically until it's about 10px from her body, so you don't have to set it horizontally.
 

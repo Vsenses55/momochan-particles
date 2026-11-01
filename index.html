@@ -34,11 +34,12 @@
   .nav #idx{color:var(--fg);min-width:52px;text-align:center}
   .nav .reading{color:var(--muted);margin-right:10px;text-transform:none;letter-spacing:.04em}
   .nav button{width:34px;height:34px;padding:0;font-size:14px;display:grid;place-items:center}
+  .hint-touch{display:none} @media (hover:none){.hint-fine{display:none}.hint-touch{display:inline}}
   .loading{position:fixed;inset:0;display:grid;place-items:center;font-family:"Instrument Serif",serif;font-style:italic;font-size:28px;color:var(--muted);pointer-events:none;transition:opacity .6s}
   @media (max-width:700px){
     .title{top:18px;left:18px}.title h1{font-size:32px}.title p{display:none}
     .panel{left:14px;right:14px;bottom:14px;gap:10px}.label{width:auto;margin-right:4px}
-    .nav{top:14px;right:14px} .stat{display:none} input[type=range]{width:110px}
+    .nav{top:14px;right:14px} .stat{right:auto;left:14px;bottom:auto;top:62px} input[type=range]{width:110px}
   }
 </style>
 </head>
@@ -66,7 +67,7 @@
   <span id="idx">01 / 02</span>
   <button id="next" aria-label="Next">→</button>
 </div>
-<div class="stat" id="stat"></div>
+<div class="stat" id="stat"><span class="hint-fine">rest your cursor on her</span><span class="hint-touch">hold a finger on her</span></div>
 
 <script>
 (() => {
@@ -74,8 +75,12 @@
   const ctx = canvas.getContext('2d');
   // ---------- the series ----------
   const scenes = [
-    { src: 'assets/cat-01.jpg', glyphs: ['希', '望'], reading: 'kibō · hope', gamma: 0.85, density: 1,   glyphSize: 0.27, glyphY: 0.5 },
-    { src: 'assets/cat-02.jpg', glyphs: ['愛'],       reading: 'ai · love',  gamma: 1.5,  density: 1.7, glyphSize: 0.36, glyphY: 0.4 },
+    { src: 'assets/cat-01.jpg', glyphs: ['希', '望'], reading: 'kibō · hope', gamma: 0.85, density: 1,   glyphSize: 0.27, glyphY: 0.5,
+      eyes: [{ u: .48, v: .276, rx: .05, ry: .032 }, { u: .685, v: .315, rx: .05, ry: .03 }],
+      ears: [{ pu: .44, pv: .215, tu: .44, tv: .035, w: .085 }, { pu: .745, pv: .25, tu: .925, tv: .135, w: .075 }] },
+    { src: 'assets/cat-02.jpg', glyphs: ['愛'],       reading: 'ai · love',  gamma: 1.5,  density: 1.7, glyphSize: 0.36, glyphY: 0.4,
+      eyes: [{ u: .558, v: .428, rx: .042, ry: .025 }, { u: .722, v: .464, rx: .044, ry: .023 }],
+      ears: [{ pu: .56, pv: .335, tu: .535, tv: .235, w: .065 }, { pu: .79, pv: .41, tu: .935, tv: .335, w: .07 }] },
   ];
   scenes.forEach(sc => { sc.im = new Image(); sc.im.src = sc.src; });
   let cur = 0, img = scenes[0].im;
@@ -84,15 +89,20 @@
   let W = 0, H = 0, scale = 1;              // device pixel buffer size
   let N = 0;
   let px, py, vx, vy, hx, hy, ink, phase, k, isWord; // particle arrays
+  // cute layer: which feature a particle belongs to (1–2 eyes, 3–4 ears) + how much it moves
+  let part, partW;
+  let feat = { eyes: [], ears: [] }, catGrid = null, gridCell = 1, gridW = 0;
+  let purr = 0, stillT = 0, faceT = 0, blinkT = -1, blinkCool = 0;
+  const earState = [{ t: 9, a: 0, cool: 0 }, { t: 9, a: 0, cool: 0 }];
+  const hearts = []; let heartClock = 0;
   let imageData, buf32, buf8;
-  let mode = 'repel', night = false;
+  let mode = 'repel';
   let radius = 130, strength = 45;
   let springGain = 1;                         // ramps after scatter
   const pointer = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, active: false, down: false };
   let t = 0, last = performance.now(), fps = 60;
 
   const PAPER = [243, 239, 231];
-  const NIGHT = [12, 12, 16];
 
   // ---------- build particles from image ----------
   function build() {
@@ -170,37 +180,58 @@
     const fs = Math.min(dh * scenes[cur].glyphSize, W * 0.25 * (narrow ? 1.3 : 1));
     tctx.font = `900 ${fs}px ${fam}`;
     tctx.textAlign = 'center'; tctx.textBaseline = 'middle';
-    const cy = oy + dh * scenes[cur].glyphY;
+    let cy = oy + dh * scenes[cur].glyphY;
     const drawGlyphs = (x) => {
       tctx.setTransform(1, 0, 0, 1, 0, 0); tctx.clearRect(0, 0, W, H);
-      const step = fs * 1.06, top = cy - step * (glyphs.length - 1) / 2;
+      const step = fs * 0.98, top = cy - step * (glyphs.length - 1) / 2;
       glyphs.forEach((g, n) => tctx.fillText(g, x, top + n * step));
     };
-    let cx = ox - dw * 0.4;
-    {
-      // measure row by row: glyph right edge vs her leftmost fur, then snug up
-      drawGlyphs(cx);
-      const g = tctx.getImageData(0, 0, W, H).data;
-      const gap = 10 * scale, run = Math.max(6, Math.round(7 * scale));
-      let minGap = Infinity;
-      for (let y = 0; y < H; y++) {
-        let gr = -1;
-        for (let x = W - 1; x >= 0; x--) if (g[(y * W + x) * 4 + 3] > 40) { gr = x; break; }
-        if (gr < 0) continue;
-        const iy = Math.round(y - oy);
-        if (iy < 0 || iy >= sh) continue;
-        let cl = Infinity;
-        // her body edge = first solid run of fur (skips the wispy tail strokes)
-        let cnt = 0;
-        for (let ix = 0; ix < sw; ix++) {
-          const w = weights[iy * sw + ix];
-          if (w > 0.14) { if (++cnt >= run) { cl = ox + ix - run + 1; break; } } else cnt = Math.max(0, cnt - 1);
-        }
-        if (cl < Infinity) minGap = Math.min(minGap, cl - gr);
+    // ---- layout: snug the kanji to her, then center the pair as one unit ----
+    const gap = dh * 0.04;                       // same breathing room for every drawing
+    const run = Math.max(6, Math.round(7 * scale));
+    const cx0 = fs * 0.6;
+    drawGlyphs(cx0);
+    const g = tctx.getImageData(0, 0, W, H).data;
+    let gL = W, gT = H, gB = 0, minGap = Infinity;
+    for (let y = 0; y < H; y++) {
+      let gl = -1, gr = -1;
+      for (let x = 0; x < W; x++) if (g[(y * W + x) * 4 + 3] > 40) { gl = x; break; }
+      if (gl < 0) continue;
+      for (let x = W - 1; x >= gl; x--) if (g[(y * W + x) * 4 + 3] > 40) { gr = x; break; }
+      gL = Math.min(gL, gl); gT = Math.min(gT, y); gB = y;
+      const iy = Math.round(y - oy);
+      if (iy < 0 || iy >= sh) continue;
+      // her body edge = first solid run of fur; any outline (paws, tail) must also stay clear
+      let cnt = 0;
+      for (let ix = 0; ix < sw; ix++) {
+        if (weights[iy * sw + ix] > 0.14) { if (++cnt >= run) { minGap = Math.min(minGap, ox + ix - run + 1 - gr); break; } }
+        else cnt = Math.max(0, cnt - 1);
       }
-      if (minGap < Infinity) cx += minGap - gap;
-      cx = Math.max(fs * 0.55, cx);
+      let c2 = 0;
+      for (let ix = 0; ix < sw; ix++) {
+        if (weights[iy * sw + ix] > 0.12) { if (++c2 >= 2) { minGap = Math.min(minGap, ox + ix - gr + gap * 0.5); break; } }
+        else c2 = 0;
+      }
     }
+    let cx = cx0 + (minGap < Infinity ? minGap - gap : 0);
+    gL += cx - cx0;
+
+    // her ink bounds (ignoring stray specks)
+    const colN = new Uint16Array(sw), rowN = new Uint16Array(sh);
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) if (weights[y * sw + x] > 0.15) { colN[x]++; rowN[y]++; }
+    let cR = 0, cT = 0, cB = sh - 1;
+    for (let x = sw - 1; x >= 0; x--) if (colN[x] > 3) { cR = x; break; }
+    for (let y = 0; y < sh; y++) if (rowN[y] > 3) { cT = y; break; }
+    for (let y = sh - 1; y >= 0; y--) if (rowN[y] > 3) { cB = y; break; }
+    const left = gL, right = ox + cR;
+    const top = Math.min(gT, oy + cT), bottom = Math.max(gB, oy + cB);
+
+    // center within the free area (phones: between the nav and the controls)
+    const areaT = narrow ? 64 * scale : 0, areaB = narrow ? H - 210 * scale : H;
+    const ddx = W / 2 - (left + right) / 2;
+    const ddy = (areaT + areaB) / 2 - (top + bottom) / 2;
+    for (let i = 0; i < catCount; i++) { tx[i] += ddx; ty[i] += ddy; }
+    ox += ddx; oy += ddy; cx += ddx; cy += ddy;
     drawGlyphs(cx);
     const td = tctx.getImageData(0, 0, W, H).data;
     let area = 0;
@@ -224,6 +255,7 @@
     hx = new Float32Array(tx); hy = new Float32Array(ty);
     ink = new Float32Array(ti);
     isWord = new Uint8Array(N); isWord.fill(1, catCount);
+    tagFeatures(catCount, ox, oy, dw, dh);
     phase = new Float32Array(N); k = new Float32Array(N);
     for (let i = 0; i < N; i++) {
       phase[i] = Math.random() * Math.PI * 2;
@@ -241,6 +273,103 @@
     }
     if (!prevN) springGain = 0.08;
       }
+
+  // ---------- cute layer: eyes, ears, where her body is ----------
+  function tagFeatures(catCount, ox, oy, dw, dh) {
+    const sc = scenes[cur];
+    part = new Uint8Array(N); partW = new Float32Array(N);
+    feat.eyes = sc.eyes.map(e => ({ x: ox + e.u * dw, y: oy + e.v * dh, rx: e.rx * dw, ry: e.ry * dh }));
+    feat.ears = sc.ears.map(e => {
+      const pxv = ox + e.pu * dw, pyv = oy + e.pv * dh, txv = ox + e.tu * dw, tyv = oy + e.tv * dh;
+      const len = Math.hypot(txv - pxv, tyv - pyv);
+      return { px: pxv, py: pyv, ax: (txv - pxv) / len, ay: (tyv - pyv) / len, len, w: e.w * dw };
+    });
+    gridCell = Math.max(8, Math.round(14 * scale)); gridW = Math.ceil(W / gridCell);
+    catGrid = new Uint16Array(gridW * Math.ceil(H / gridCell));
+    for (let i = 0; i < catCount; i++) {
+      const x = hx[i], y = hy[i];
+      const gi = ((y / gridCell) | 0) * gridW + ((x / gridCell) | 0);
+      if (gi >= 0 && gi < catGrid.length) catGrid[gi]++;
+      // eyes (a little beyond the eye so the lid fur comes along)
+      for (let e = 0; e < feat.eyes.length; e++) {
+        const E = feat.eyes[e], nx = (x - E.x) / (E.rx * 1.35), ny = (y - E.y) / (E.ry * 1.6), d = nx * nx + ny * ny;
+        if (d < 1) { part[i] = 1 + e; partW[i] = 1 - d; }
+      }
+      // ears: along the base→tip axis, narrowing toward the tip; the base stays put
+      for (let e = 0; e < feat.ears.length; e++) {
+        const A = feat.ears[e], dx = x - A.px, dy = y - A.py;
+        const along = (dx * A.ax + dy * A.ay) / A.len, across = Math.abs(dx * A.ay - dy * A.ax);
+        if (along > -0.05 && along < 1.15 && across < A.w * (1.15 - along * 0.6)) {
+          part[i] = 3 + e; partW[i] = Math.min(1, Math.max(0, (along + 0.05) / 0.6)) ** 1.5;
+        }
+      }
+    }
+    purr = 0; stillT = 0; faceT = 0; blinkT = -1; hearts.length = 0;
+  }
+  function onCat(x, y) {
+    if (!catGrid) return false;
+    const gi = ((y / gridCell) | 0) * gridW + ((x / gridCell) | 0);
+    return gi >= 0 && gi < catGrid.length && catGrid[gi] > 6;
+  }
+  function blinkAmount() {               // slow blink: close 0.45s, hold 0.35s, open 0.6s
+    if (blinkT < 0) return 0;
+    const c = 0.45, h = 0.35, o = 0.6, e = (u) => u * u * (3 - 2 * u);
+    if (blinkT < c) return e(blinkT / c);
+    if (blinkT < c + h) return 1;
+    if (blinkT < c + h + o) return 1 - e((blinkT - c - h) / o);
+    return 0;
+  }
+  function spawnHeart(x, y) {
+    const size = (11 + Math.random() * 7) * scale, pts = [];
+    const n = Math.round(size * size * 1.6);
+    while (pts.length < n * 2) {        // fill a heart shape: (x²+y²−1)³ − x²y³ < 0
+      const u = (Math.random() * 2 - 1) * 1.2, v = (Math.random() * 2 - 1) * 1.2;
+      const q = u * u + v * v - 1;
+      if (q * q * q - u * u * v * v * v < 0) pts.push(u * size, -v * size);
+    }
+    hearts.push({ x, y, vx: (Math.random() - 0.5) * 12 * scale, life: 0, max: 2.2 + Math.random() * 0.6, ph: Math.random() * 6, pts });
+  }
+  function updateCute(dt) {
+    const sp = Math.hypot(pointer.vx, pointer.vy);
+    const over = pointer.active && onCat(pointer.x, pointer.y);
+    // purr: rest on her and she settles, hums, and hearts drift up
+    stillT = over && sp < 2.2 * scale ? stillT + dt : Math.max(0, stillT - dt * 4);
+    const target = Math.min(1, Math.max(0, (stillT - 0.3) / 0.6));
+    purr += (target - purr) * Math.min(1, dt * (target > purr ? 4 : 6));
+    if (purr > 0.55) {
+      heartClock -= dt;
+      if (heartClock <= 0) {
+        spawnHeart(pointer.x + (Math.random() - 0.5) * 50 * scale, pointer.y - (14 + Math.random() * 18) * scale);
+        heartClock = 0.38 + Math.random() * 0.35;
+      }
+    }
+    for (let h = hearts.length - 1; h >= 0; h--) {
+      const H_ = hearts[h]; H_.life += dt;
+      H_.y -= (32 + H_.life * 12) * scale * dt;
+      H_.x += (H_.vx + Math.sin(H_.life * 3 + H_.ph) * 14 * scale) * dt;
+      if (H_.life > H_.max) hearts.splice(h, 1);
+    }
+    // slow blink: linger on her face
+    const E0 = feat.eyes[0], E1 = feat.eyes[1];
+    if (E0 && E1 && pointer.active) {
+      const fx = (E0.x + E1.x) / 2, fy = (E0.y + E1.y) / 2, fr = Math.hypot(E1.x - E0.x, E1.y - E0.y) * 1.25;
+      const onFace = Math.hypot(pointer.x - fx, pointer.y - fy) < fr;
+      faceT = onFace ? faceT + dt : 0;
+    } else faceT = 0;
+    blinkCool -= dt;
+    if (blinkT < 0 && faceT > 1.5 && blinkCool <= 0) { blinkT = 0; blinkCool = 3.2; }
+    if (blinkT >= 0) { blinkT += dt; if (blinkT > 1.4) blinkT = -1; }
+    // ear twitch: brush past an ear
+    feat.ears.forEach((A, e) => {
+      const S_ = earState[e]; S_.cool -= dt; S_.t += dt;
+      if (!pointer.active || S_.cool > 0 || sp < 3 * scale) return;
+      const dx = pointer.x - A.px, dy = pointer.y - A.py;
+      const along = (dx * A.ax + dy * A.ay) / A.len, across = dx * A.ay - dy * A.ax;
+      if (along > 0.15 && along < 1.4 && Math.abs(across) < A.w * 1.8) {
+        S_.t = 0; S_.cool = 0.9; S_.a = (across > 0 ? 1 : -1) * (0.22 + Math.random() * 0.1);
+      }
+    });
+  }
 
   // ---------- scene switching ----------
   const idxEl = () => document.getElementById('idx');
@@ -337,13 +466,31 @@
     const sweep = pointer.down ? 0.35 : 0.08;
     const breathe = 0.35 * scale;
     const f60 = dt * 60;
+    updateCute(dt);
+    const hum = purr * 0.55 * scale, gentle = 1 - purr;
+    const blink = blinkAmount();
+    const earAng = earState.map(S_ => S_.t < 0.8 ? S_.a * Math.exp(-S_.t * 7) * Math.cos(S_.t * 30) : 0);
 
     for (let i = 0; i < N; i++) {
       let x = px[i], y = py[i];
       const ph = phase[i];
       // home with a tiny living shimmer
-      const tx = hx[i] + Math.sin(t * 1.3 + ph) * breathe;
-      const ty = hy[i] + Math.cos(t * 1.1 + ph * 1.7) * breathe;
+      let tx = hx[i] + Math.sin(t * 1.3 + ph) * breathe;
+      let ty = hy[i] + Math.cos(t * 1.1 + ph * 1.7) * breathe;
+      if (hum && !isWord[i]) { tx += Math.sin(t * 52 + ph * 9) * hum; ty += Math.cos(t * 47 + ph * 7) * hum; }
+      const pf = part[i];
+      if (pf) {
+        if (pf <= 2 && blink) {
+          const E = feat.eyes[pf - 1];
+          ty = E.y + (ty - E.y) * (1 - blink * 0.9 * partW[i]);
+        } else if (pf >= 3) {
+          const a = earAng[pf - 3] * partW[i];
+          if (a) {
+            const A = feat.ears[pf - 3], dx = tx - A.px, dy = ty - A.py, c = Math.cos(a), sn = Math.sin(a);
+            tx = A.px + dx * c - dy * sn; ty = A.py + dx * sn + dy * c;
+          }
+        }
+      }
       let ax = (tx - x) * k[i] * springGain;
       let ay = (ty - y) * k[i] * springGain;
 
@@ -351,7 +498,7 @@
         const dx = x - mx, dy = y - my, d2 = dx * dx + dy * dy;
         if (d2 < R2) {
           const d = Math.sqrt(d2) + 0.001;
-          const fall = 1 - d / R, f = fall * fall * S;
+          const fall = 1 - d / R, f = fall * fall * S * gentle;
           const nx = dx / d, ny = dy / d;
           if (mode === 'repel') {
             ax += nx * f * 6 * scale; ay += ny * f * 6 * scale;
@@ -380,39 +527,27 @@
 
   // ---------- render ----------
   function render() {
-    const bg = night ? NIGHT : PAPER;
-    if (night) {
-      // fade toward background → soft light trails
-      for (let j = 0; j < buf8.length; j += 4) {
-        buf8[j]     = buf8[j]     + (bg[0] - buf8[j])     * 0.22;
-        buf8[j + 1] = buf8[j + 1] + (bg[1] - buf8[j + 1]) * 0.22;
-        buf8[j + 2] = buf8[j + 2] + (bg[2] - buf8[j + 2]) * 0.22;
-        buf8[j + 3] = 255;
-      }
-    } else {
-      buf32.fill((255 << 24) | (bg[2] << 16) | (bg[1] << 8) | bg[0]);
-    }
-
+    buf32.fill((255 << 24) | (PAPER[2] << 16) | (PAPER[1] << 8) | PAPER[0]);
     for (let i = 0; i < N; i++) {
       const x = px[i] | 0, y = py[i] | 0;
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
       const j = (y * W + x) << 2;
-      const sp = Math.min(1, Math.abs(vx[i]) + Math.abs(vy[i]) > 0 ? Math.hypot(vx[i], vy[i]) / (10 * scale) : 0);
+      const sp = Math.min(1, Math.hypot(vx[i], vy[i]) / (10 * scale));
       const a = 0.32 + ink[i] * 0.7;
-      if (false) {
-        if (!night) { buf8[j] -= a * (50 - sp * 20); buf8[j + 1] -= a * (150 - sp * 30); buf8[j + 2] -= a * (175 - sp * 40); }
-        else { const b = a * 0.5; buf8[j] += b * 255; buf8[j + 1] += b * (78 + sp * 130); buf8[j + 2] += b * (34 + sp * 190); }
-      } else if (!night) {
-        // ink: subtract; fast particles bleed toward a rust red
-        buf8[j]     -= a * (205 - sp * 40);
-        buf8[j + 1] -= a * (210 + sp * 25);
-        buf8[j + 2] -= a * (205 + sp * 40);
-      } else {
-        // light: add; warm amber at rest, cool white-blue when moving
-        const b = a * 0.75;
-        buf8[j]     += b * (255 - sp * 110);
-        buf8[j + 1] += b * (170 + sp * 50);
-        buf8[j + 2] += b * (95 + sp * 160);
+      // ink: subtract; fast particles bleed toward a rust red
+      buf8[j]     -= a * (205 - sp * 40);
+      buf8[j + 1] -= a * (210 + sp * 25);
+      buf8[j + 2] -= a * (205 + sp * 40);
+    }
+    // hearts, in the same ink, fading as they rise
+    for (const h of hearts) {
+      const fadeIn = Math.min(1, h.life / 0.25), fadeOut = Math.min(1, (h.max - h.life) / 0.8);
+      const a = 0.95 * fadeIn * fadeOut, grow = 0.75 + Math.min(1, h.life / 0.5) * 0.25;
+      for (let p = 0; p < h.pts.length; p += 2) {
+        const x = (h.x + h.pts[p] * grow) | 0, y = (h.y + h.pts[p + 1] * grow) | 0;
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        const j = (y * W + x) << 2;
+        buf8[j] -= a * 165; buf8[j + 1] -= a * 210; buf8[j + 2] -= a * 205;
       }
     }
     ctx.putImageData(imageData, 0, 0);
@@ -424,7 +559,6 @@
     fps += ((1 / Math.max(dt, 0.001)) - fps) * 0.05;
     step(dt);
     render();
-    if ((now | 0) % 15 === 0) stat.innerHTML = `${mode} · r ${radius} · s ${strength}<br>${N.toLocaleString()} particles · ${Math.round(fps)} fps`;
     requestAnimationFrame(frame);
   }
 
