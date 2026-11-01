@@ -16,7 +16,8 @@ An interactive series of ink drawings of a cat, each rebuilt from tens of thousa
 | Drag | Sweep ink along with the pointer |
 | `1` `2` `3` `4` | Force mode: Repel · Vortex · Gravity · Wind |
 | `Space` | Scatter everything, then let it reform |
-| `←` `→` | Previous / next drawing (particles morph between them) |
+| `←` `→`, scroll, or a quick swipe up/down | Previous / next drawing (particles morph between them) |
+| Leave it alone | Autoplays to the next drawing every 10 seconds (pauses while you pet her or drag); the line under the counter shows the timer |
 | Rest the cursor on her (or hold a finger) | She settles and purrs |
 | Brush past an ear | The ear twitches |
 
@@ -63,6 +64,7 @@ Drop the image in `assets/` and add an entry to the `scenes` array near the top 
 | `glyphNudge` | Optional. Moves the kanji right by this share of the drawing's height after it's placed, so it can tuck over faint fur like a tail; anything it covers is cleared |
 | `glyphY` | Vertical center of the kanji as a share of the drawing's height (0.5 = centered) |
 | `eyes` | Two ellipses `{ u, v, rx, ry, tilt }` used for her random slow blinks (`tilt` is optional, in degrees, clockwise, so a lid can close along the angle of a tilted head): center and radii as fractions of the drawing's width (`u`, `rx`) and height (`v`, `ry`) |
+| `sway` | Optional list of parts that swing on their own, like a pendant or tail: `{ pu, pv, tu, tv, w, taper, curl, amp, speed, wag }`. Pivot point, tip point, half-width, how much it narrows toward the tip, how much more the tip moves than the base, swing angle in radians, speed, and `wag: true` for an irregular tail-like rhythm |
 | `ears` | Two ears `{ pu, pv, tu, tv, w }` used for the twitch: base point, tip point, and half-width, as fractions of the drawing |
 
 The kanji is placed to the left of the drawing and slid right automatically until it's about 10px from her body, so you don't have to set it horizontally.

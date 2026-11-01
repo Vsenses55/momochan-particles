@@ -31,6 +31,9 @@
   input[type=range]::-moz-range-thumb{width:13px;height:13px;border:0;border-radius:50%;background:var(--fg);cursor:pointer}
   .stat{position:fixed;right:32px;bottom:28px;font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;text-align:right;line-height:1.7;pointer-events:none}
   .nav{position:fixed;top:28px;right:32px;display:flex;align-items:center;gap:10px;font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+  .nav{flex-wrap:wrap;justify-content:flex-end}
+  .nav .prog{flex-basis:100%;height:1px;background:var(--line);margin-top:4px;overflow:hidden}
+  .nav .prog i{display:block;height:100%;background:var(--fg);transform-origin:left;transform:scaleX(0)}
   .nav #idx{color:var(--fg);min-width:52px;text-align:center}
   .nav .reading{color:var(--muted);margin-right:10px;text-transform:none;letter-spacing:.04em}
   .nav button{width:34px;height:34px;padding:0;font-size:14px;display:grid;place-items:center}
@@ -68,6 +71,7 @@
   <button id="prev" aria-label="Previous">←</button>
   <span id="idx">01 / 02</span>
   <button id="next" aria-label="Next">→</button>
+  <span class="prog"><i id="prog"></i></span>
 </div>
 <div class="stat" id="stat"><span class="hint-fine">rest your cursor on her</span><span class="hint-touch">hold a finger on her</span></div>
 
@@ -79,10 +83,14 @@
   const scenes = [
     { src: 'assets/cat-01.jpg', glyphs: ['希', '望'], reading: 'kibō · hope', gamma: 0.85, density: 1,   glyphSize: 0.27, glyphY: 0.5, glyphNudge: 0.075,
       eyes: [{ u: .48, v: .276, rx: .05, ry: .032, tilt: 15 }, { u: .685, v: .315, rx: .05, ry: .03 }],
-      ears: [{ pu: .44, pv: .215, tu: .44, tv: .035, w: .085 }, { pu: .745, pv: .25, tu: .925, tv: .135, w: .075 }] },
+      ears: [{ pu: .44, pv: .215, tu: .44, tv: .035, w: .085 }, { pu: .745, pv: .25, tu: .925, tv: .135, w: .075 }],
+      // her pendant swings from the collar ring
+      sway: [{ pu: .503, pv: .462, tu: .5, tv: .575, w: .06, taper: 0, curl: 0.5, amp: 0.2, speed: 1.9 }] },
     { src: 'assets/cat-02.jpg', glyphs: ['愛'],       reading: 'ai · love',  gamma: 1.5,  density: 1.7, glyphSize: 0.36, glyphY: 0.4,
-      eyes: [{ u: .558, v: .428, rx: .042, ry: .025 }, { u: .722, v: .464, rx: .044, ry: .023 }],
-      ears: [{ pu: .56, pv: .335, tu: .535, tv: .235, w: .065 }, { pu: .79, pv: .41, tu: .935, tv: .335, w: .07 }] },
+      eyes: [{ u: .558, v: .428, rx: .042, ry: .025, tilt: 18 }, { u: .722, v: .464, rx: .044, ry: .023 }],
+      ears: [{ pu: .56, pv: .335, tu: .535, tv: .235, w: .065 }, { pu: .79, pv: .41, tu: .935, tv: .335, w: .07 }],
+      // a slow, lazy tail wag that bends more toward the tip
+      sway: [{ pu: .72, pv: .19, tu: .95, tv: .02, w: .1, taper: 0.15, curl: 2.2, amp: 0.15, speed: 1.35, wag: true }] },
   ];
   scenes.forEach(sc => { sc.im = new Image(); sc.im.src = sc.src; });
   let cur = 0, img = scenes[0].im;
@@ -93,7 +101,7 @@
   let px, py, vx, vy, hx, hy, ink, phase, k, isWord; // particle arrays
   // cute layer: which feature a particle belongs to (1–2 eyes, 3–4 ears) + how much it moves
   let part, partW;
-  let feat = { eyes: [], ears: [] }, catGrid = null, gridCell = 1, gridW = 0;
+  let feat = { eyes: [], ears: [], sway: [] }, catGrid = null, gridCell = 1, gridW = 0;
   let purr = 0, stillT = 0, faceT = 0, blinkT = -1, blinkCool = 0;
   const earState = [{ t: 9, a: 0, cool: 0 }, { t: 9, a: 0, cool: 0 }];
   const hearts = []; let heartClock = 0;
@@ -305,6 +313,11 @@
       const len = Math.hypot(txv - pxv, tyv - pyv);
       return { px: pxv, py: pyv, ax: (txv - pxv) / len, ay: (tyv - pyv) / len, len, w: e.w * dw };
     });
+    feat.sway = (sc.sway || []).map(e => {
+      const pxv = ox + e.pu * dw, pyv = oy + e.pv * dh, txv = ox + e.tu * dw, tyv = oy + e.tv * dh;
+      const len = Math.hypot(txv - pxv, tyv - pyv);
+      return { ...e, px: pxv, py: pyv, ax: (txv - pxv) / len, ay: (tyv - pyv) / len, len, w: e.w * dw };
+    });
     gridCell = Math.max(8, Math.round(14 * scale)); gridW = Math.ceil(W / gridCell);
     catGrid = new Uint16Array(gridW * Math.ceil(H / gridCell));
     for (let i = 0; i < N; i++) {
@@ -323,6 +336,16 @@
         const along = (dx * A.ax + dy * A.ay) / A.len, across = Math.abs(dx * A.ay - dy * A.ax);
         if (along > -0.05 && along < 1.15 && across < A.w * (1.15 - along * 0.6)) {
           part[i] = 3 + e; partW[i] = Math.min(1, Math.max(0, (along + 0.05) / 0.6)) ** 1.5;
+        }
+      }
+      // swaying parts (pendant, tail): rotate about the pivot, more toward the tip
+      for (let e = 0; e < feat.sway.length; e++) {
+        const A = feat.sway[e], dx = x - A.px, dy = y - A.py;
+        const along = (dx * A.ax + dy * A.ay) / A.len, across = Math.abs(dx * A.ay - dy * A.ax);
+        const half = A.w * (1 - Math.max(0, along) * A.taper);
+        if (along > -0.04 && along < 1.12 && across < half * 1.15) {
+          const edge = Math.min(1, (half * 1.15 - across) / (half * 0.25));   // soft sides, no tearing
+          part[i] = 5 + e; partW[i] = Math.min(1, Math.max(0, along + 0.04)) ** A.curl * edge;
         }
       }
     }
@@ -399,7 +422,10 @@
     idxEl().textContent = `${String(cur + 1).padStart(2, '0')} / ${String(scenes.length).padStart(2, '0')}`;
     document.getElementById('reading').textContent = scenes[cur].reading;
   }
+  const AUTOPLAY = 10;                 // seconds per drawing
+  let autoT = 0, navLock = 0;
   function go(d) {
+    autoT = 0; navLock = 1.1;
     cur = (cur + d + scenes.length) % scenes.length;
     img = scenes[cur].im;
     const run = () => {
@@ -497,6 +523,9 @@
     updateCute(dt);
     const hum = purr * 0.55 * scale, gentle = 1 - purr;
     const blink = blinkAmount();
+    const swayAng = feat.sway.map(A => A.wag
+      ? A.amp * (Math.sin(t * A.speed) * 0.8 + Math.sin(t * A.speed * 2.3 + 1.1) * 0.25)
+      : A.amp * Math.sin(t * A.speed) * (0.85 + 0.15 * Math.sin(t * 0.37)));
     const earAng = earState.map(S_ => S_.t < 0.8 ? S_.a * Math.exp(-S_.t * 7) * Math.cos(S_.t * 30) : 0);
 
     for (let i = 0; i < N; i++) {
@@ -513,6 +542,12 @@
           // lids close onto a line through the eye, tilted to follow her head
           const d = (tx - E.x) * E.nx + (ty - E.y) * E.ny, c = d * blink * 0.9 * partW[i];
           tx -= E.nx * c; ty -= E.ny * c;
+        } else if (pf >= 5) {
+          const a = swayAng[pf - 5] * partW[i];
+          if (a) {
+            const A = feat.sway[pf - 5], dx = tx - A.px, dy = ty - A.py, c = Math.cos(a), sn = Math.sin(a);
+            tx = A.px + dx * c - dy * sn; ty = A.py + dx * sn + dy * c;
+          }
         } else if (pf >= 3) {
           const a = earAng[pf - 3] * partW[i];
           if (a) {
@@ -584,11 +619,33 @@
   }
 
   const stat = document.getElementById('stat');
+  const progEl = document.getElementById('prog');
+  // scroll / swipe to move through the series
+  let wheelAcc = 0, wheelT = 0;
+  addEventListener('wheel', e => {
+    e.preventDefault();
+    if (navLock > 0) return;
+    const now = performance.now(); if (now - wheelT > 250) wheelAcc = 0; wheelT = now;
+    wheelAcc += Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (Math.abs(wheelAcc) > 60) { go(wheelAcc > 0 ? 1 : -1); wheelAcc = 0; }
+  }, { passive: false });
+  let sw = null;
+  canvas.addEventListener('touchstart', e => { if (e.touches.length === 1) sw = { y: e.touches[0].clientY, t: performance.now() }; }, { passive: true });
+  canvas.addEventListener('touchend', e => {
+    if (!sw) return;
+    const dy = e.changedTouches[0].clientY - sw.y, dtm = performance.now() - sw.t; sw = null;
+    if (navLock <= 0 && Math.abs(dy) > 90 && dtm < 450) go(dy < 0 ? 1 : -1);   // quick flick up/down
+  }, { passive: true });
   function frame(now) {
     const dt = Math.min(0.033, (now - last) / 1000); last = now;
     fps += ((1 / Math.max(dt, 0.001)) - fps) * 0.05;
     step(dt);
     render();
+    // autoplay: holds while you're petting her or dragging
+    navLock = Math.max(0, navLock - dt);
+    if (!(pointer.down || stillT > 0.3)) autoT += dt;
+    if (autoT >= AUTOPLAY) go(1);
+    progEl.style.transform = `scaleX(${Math.min(1, autoT / AUTOPLAY)})`;
     requestAnimationFrame(frame);
   }
 
