@@ -21,7 +21,7 @@ An interactive series of ink drawings of a cat, each rebuilt from tens of thousa
 | Linger on her face | A slow blink (how cats say they trust you) |
 | Brush past an ear | The ear twitches |
 
-The radius and strength sliders tune the force.
+The radius and strength sliders tune the force. The density slider (25–250%) rebuilds the drawing with fewer or more particles: low is a loose, airy scatter, and high gets close to the original pen drawing.
 
 ## Run locally
 
