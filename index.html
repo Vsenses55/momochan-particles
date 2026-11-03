@@ -91,6 +91,9 @@
       ears: [{ pu: .56, pv: .335, tu: .535, tv: .235, w: .065 }, { pu: .79, pv: .41, tu: .935, tv: .335, w: .07 }],
       // a slow, lazy tail wag that bends more toward the tip
       sway: [{ pu: .72, pv: .19, tu: .95, tv: .02, w: .1, taper: 0.15, curl: 2.2, amp: 0.15, speed: 1.35, wag: true }] },
+    { src: 'assets/cat-03.jpg', glyphs: ['懐', '疑'], reading: 'kaigi · skeptical', gamma: 1.35, density: 1.6, glyphSize: 0.22, glyphY: 0.5,
+      eyes: [{ u: .44, v: .241, rx: .052, ry: .02 }, { u: .672, v: .248, rx: .05, ry: .02 }],
+      ears: [{ pu: .35, pv: .13, tu: .31, tv: .018, w: .075 }, { pu: .77, pv: .13, tu: .875, tv: .072, w: .07 }] },
   ];
   scenes.forEach(sc => { sc.im = new Image(); sc.im.src = sc.src; });
   let cur = 0, img = scenes[0].im;
@@ -652,7 +655,7 @@
   scenes[0].im.onload = async () => {
     try {
       await Promise.race([
-        Promise.all([document.fonts.load('900 100px "WordFace"', '希望愛'), document.fonts.load('900 100px "Noto Sans JP"', '希望愛')]),
+        Promise.all([document.fonts.load('900 100px "WordFace"', '希望愛懐疑'), document.fonts.load('900 100px "Noto Sans JP"', '希望愛懐疑')]),
         new Promise(r => setTimeout(r, 2500))
       ]);
     } catch (e) {}
