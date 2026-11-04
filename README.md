@@ -61,6 +61,7 @@ Drop the image in `assets/` and add an entry to the `scenes` array near the top 
 | `gamma` | Tone curve for sampling. Lower brings out light hatching; raise it (about 1.5) for drawings with a lot of dark fill |
 | `density` | Particle-count multiplier. Raise it for darker drawings |
 | `glyphSize` | Kanji size as a share of the drawing's height. About 0.27 for two characters, 0.36 for one |
+| `scale` | Optional. Shrinks or enlarges the drawing (1 = default), for drawings that feel bigger than the rest of the series. Desktop only; on phones every drawing already fills the width |
 | `glyphNudge` | Optional. Moves the kanji right by this share of the drawing's height after it's placed, so it can tuck over faint fur like a tail; anything it covers is cleared |
 | `glyphY` | Vertical center of the kanji as a share of the drawing's height (0.5 = centered) |
 | `eyes` | Two ellipses `{ u, v, rx, ry, tilt }` used for her random slow blinks (`tilt` is optional, in degrees, clockwise, so a lid can close along the angle of a tilted head): center and radii as fractions of the drawing's width (`u`, `rx`) and height (`v`, `ry`) |
