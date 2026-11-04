@@ -38,6 +38,10 @@
   .nav .reading{color:var(--muted);margin-right:10px;text-transform:none;letter-spacing:.04em}
   .nav button{width:34px;height:34px;padding:0;font-size:14px;display:grid;place-items:center}
   .hint-touch{display:none} @media (hover:none){.hint-fine{display:none}.hint-touch{display:inline}}
+  .swatches{display:flex;gap:7px}
+  .swatches button{width:22px;height:22px;padding:0;border-radius:50%;border:1px solid var(--line);position:relative;overflow:hidden}
+  .swatches button i{position:absolute;inset:5px;border-radius:50%}
+  .swatches button.on{outline:1.5px solid var(--fg);outline-offset:2px;background:inherit}
   .val{color:var(--muted);min-width:42px}
   .loading{position:fixed;inset:0;display:grid;place-items:center;font-family:"Instrument Serif",serif;font-style:italic;font-size:28px;color:var(--muted);pointer-events:none;transition:opacity .6s}
   @media (max-width:700px){
@@ -60,9 +64,11 @@
   </div>
   <div class="row"><span class="label">Radius</span><input id="radius" type="range" min="40" max="320" value="130"></div>
   <div class="row"><span class="label">Strength</span><input id="strength" type="range" min="1" max="100" value="45"></div>
-  <div class="row"><span class="label">Density</span><input id="density" type="range" min="25" max="250" step="5" value="100"><span class="val" id="densityVal">100%</span></div>
+  <div class="row"><span class="label">Color</span><span class="swatches" id="swatches"></span><span class="val" id="paletteName">Sumi</span></div>
+  <div class="row"><span class="label">Density</span><input id="density" type="range" min="25" max="250" step="5" value="190"><span class="val" id="densityVal">190%</span></div>
   <div class="row"><span class="label">Do</span>
     <button id="scatter">Scatter<kbd>space</kbd></button>
+    <button id="dust" class="on">Dust</button>
   </div>
 </div>
 
@@ -114,12 +120,30 @@
   const hearts = []; let heartClock = 0;
   let imageData, buf32, buf8;
   let mode = 'repel';
-  let radius = 130, strength = 45, densityMul = 1;
+  let radius = 130, strength = 45, densityMul = 1.9;
   let springGain = 1;                         // ramps after scatter
   const pointer = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, active: false, down: false };
   let t = 0, last = performance.now(), fps = 60;
 
-  const PAPER = [243, 239, 231];
+  // palettes: paper, ink at rest, and the color ink bleeds toward when it moves
+  const PALETTES = [
+    { name: 'Sumi',      paper: [243, 239, 231], ink: [38, 29, 26],   move: [78, 4, 0] },     // default: black ink, rust when stirred
+    { name: 'Indigo',    paper: [241, 240, 236], ink: [28, 48, 88],   move: [70, 140, 175] },
+    { name: 'Vermilion', paper: [245, 239, 228], ink: [168, 38, 28],  move: [232, 150, 40] },
+    { name: 'Sepia',     paper: [244, 236, 220], ink: [88, 58, 38],   move: [182, 120, 58] },
+    { name: 'Matcha',    paper: [242, 240, 230], ink: [58, 78, 46],   move: [150, 160, 62] },
+    { name: 'Plum',      paper: [244, 238, 236], ink: [84, 34, 64],   move: [214, 96, 128] },
+  ];
+  let pal = 0, PAPER = PALETTES[0].paper, SUB = [205, 210, 205], SUBM = [165, 235, 245];
+  function setPalette(n) {
+    pal = n; const P = PALETTES[n]; PAPER = P.paper;
+    SUB = P.paper.map((c, k) => c - P.ink[k]); SUBM = P.paper.map((c, k) => c - P.move[k]);
+    const r = document.documentElement.style, rgb = c => `rgb(${c.join(',')})`;
+    r.setProperty('--bg', rgb(P.paper)); r.setProperty('--accent', rgb(P.move));
+    r.setProperty('--fg', rgb(P.ink.map(c => Math.round(c * 0.75))));
+    document.querySelectorAll('#swatches button').forEach((b, k) => b.classList.toggle('on', k === n));
+    document.getElementById('paletteName').textContent = P.name;
+  }
 
   // ---------- build particles from image ----------
   function build(snap) {
@@ -130,6 +154,7 @@
     H = Math.max(1, Math.floor(cssH * scale));
     canvas.width = W; canvas.height = H;
     imageData = ctx.createImageData(W, H);
+    if (!dx_ || dx_.W !== W || dx_.H !== H) { buildDust(); dx_.W = W; dx_.H = H; }
     buf8 = imageData.data;
     buf32 = new Uint32Array(buf8.buffer);
 
@@ -140,7 +165,7 @@
     let dh, dw, ox, oy;
     if (narrow) {
       // phone: cat + kanji side by side, sitting above the controls
-      const availH = H - 240 * scale - 24 * scale;
+      const availH = H - 280 * scale - 24 * scale;
       dh = Math.min(availH * 0.95, (W * 0.94) / (ar + KW));
       dw = dh * ar;
       ox = (W - (dw + dh * KW)) / 2 + dh * KW;
@@ -240,7 +265,7 @@
     const top = Math.min(gT, oy + cT), bottom = Math.max(gB, oy + cB);
 
     // center within the free area (phones: between the nav and the controls)
-    const areaT = narrow ? 64 * scale : 0, areaB = narrow ? H - 250 * scale : H;
+    const areaT = narrow ? 64 * scale : 0, areaB = narrow ? H - 290 * scale : H;
     const ddx = W / 2 - (left + right) / 2;
     const ddy = (areaT + areaB) / 2 - (top + bottom) / 2;
     for (let i = 0; i < catCount; i++) { tx[i] += ddx; ty[i] += ddy; }
@@ -481,6 +506,7 @@
   }
 
   function scatter() {
+    for (let i = 0; i < DN; i++) { const a = Math.random() * Math.PI * 2, s = (2 + Math.random() * 8) * scale; dvx_[i] += Math.cos(a) * s; dvy_[i] += Math.sin(a) * s; }
     for (let i = 0; i < N; i++) {
       const a = Math.random() * Math.PI * 2, s = (4 + Math.random() * 26) * scale;
       vx[i] += Math.cos(a) * s; vy[i] += Math.sin(a) * s - 4 * scale;
@@ -494,6 +520,16 @@
   }
   document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
   document.getElementById('scatter').addEventListener('click', scatter);
+  document.getElementById('dust').addEventListener('click', e => { dustOn = !dustOn; e.currentTarget.classList.toggle('on', dustOn); });
+  const swWrap = document.getElementById('swatches');
+  PALETTES.forEach((P, n) => {
+    const b = document.createElement('button'); b.title = P.name; b.setAttribute('aria-label', P.name + ' palette');
+    b.style.background = `rgb(${P.paper.join(',')})`;
+    b.innerHTML = `<i style="background:rgb(${P.ink.join(',')})"></i>`;
+    b.addEventListener('click', () => setPalette(n));
+    swWrap.appendChild(b);
+  });
+  setPalette(0);
   document.getElementById('prev').addEventListener('click', () => go(-1));
   document.getElementById('next').addEventListener('click', () => go(1));
   document.getElementById('radius').addEventListener('input', e => radius = +e.target.value);
@@ -595,22 +631,71 @@
       vx[i] = nvx; vy[i] = nvy;
       px[i] = x + nvx * f60; py[i] = y + nvy * f60;
     }
+    stepDust(dt);
     pointer.vx *= 0.6; pointer.vy *= 0.6;
+  }
+
+  // ---------- ambient dust ----------
+  let DN = 0, dx_, dy_, dvx_, dvy_, da_, dph_, dustOn = true, dustFade = 1;
+  function buildDust() {
+    DN = Math.round(Math.min(2600, (W * H) / (1100 * scale * scale)));
+    dx_ = new Float32Array(DN); dy_ = new Float32Array(DN); dvx_ = new Float32Array(DN); dvy_ = new Float32Array(DN);
+    da_ = new Float32Array(DN); dph_ = new Float32Array(DN);
+    for (let i = 0; i < DN; i++) {
+      dx_[i] = Math.random() * W; dy_[i] = Math.random() * H;
+      da_[i] = 0.12 + Math.random() ** 3 * 0.38;      // mostly very faint, a few darker specks
+      dph_[i] = Math.random() * 100;
+    }
+  }
+  function stepDust(dt) {
+    dustFade += ((dustOn ? 1 : 0) - dustFade) * Math.min(1, dt * 3);
+    if (!dustOn && dustFade < 0.01) return;
+    const f60 = dt * 60, damp = Math.pow(0.94, f60), R = radius * scale * 1.2, R2 = R * R, S = strength / 45;
+    const pa = pointer.active, mx = pointer.x, my = pointer.y;
+    const pvx = Math.max(-60, Math.min(60, pointer.vx)), pvy = Math.max(-60, Math.min(60, pointer.vy));
+    for (let i = 0; i < DN; i++) {
+      const x = dx_[i], y = dy_[i], ph = dph_[i];
+      // slow drift along a gentle flow field, with a faint upward float
+      const ang = Math.sin(x * 0.0021 + t * 0.11 + ph * 0.01) * 2.2 + Math.cos(y * 0.0017 - t * 0.08) * 1.6;
+      let ax = Math.cos(ang) * 0.006 * scale, ay = (Math.sin(ang) * 0.006 - 0.002) * scale;
+      if (pa) {
+        const ddx = x - mx, ddy = y - my, d2 = ddx * ddx + ddy * ddy;
+        if (d2 < R2) {
+          const d = Math.sqrt(d2) + 0.001, fall = 1 - d / R;
+          ax += ddx / d * fall * fall * 0.9 * S * scale + pvx * fall * 0.04;
+          ay += ddy / d * fall * fall * 0.9 * S * scale + pvy * fall * 0.04;
+        }
+      }
+      let vx2 = (dvx_[i] + ax * f60) * damp, vy2 = (dvy_[i] + ay * f60) * damp;
+      dvx_[i] = vx2; dvy_[i] = vy2;
+      let nx = x + vx2 * f60, ny = y + vy2 * f60;
+      if (nx < -4) nx += W + 8; else if (nx > W + 4) nx -= W + 8;
+      if (ny < -4) ny += H + 8; else if (ny > H + 4) ny -= H + 8;
+      dx_[i] = nx; dy_[i] = ny;
+    }
   }
 
   // ---------- render ----------
   function render() {
     buf32.fill((255 << 24) | (PAPER[2] << 16) | (PAPER[1] << 8) | PAPER[0]);
+    const s0 = SUB[0], s1 = SUB[1], s2 = SUB[2], m0 = SUBM[0], m1 = SUBM[1], m2 = SUBM[2];
+    // ambient dust: faint motes drifting over the paper
+    if (dustOn) for (let i = 0; i < DN; i++) {
+      const x = dx_[i] | 0, y = dy_[i] | 0;
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const j = (y * W + x) << 2, a = da_[i] * dustFade;
+      buf8[j] -= a * s0; buf8[j + 1] -= a * s1; buf8[j + 2] -= a * s2;
+    }
     for (let i = 0; i < N; i++) {
       const x = px[i] | 0, y = py[i] | 0;
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
       const j = (y * W + x) << 2;
       const sp = Math.min(1, Math.hypot(vx[i], vy[i]) / (10 * scale));
       const a = 0.32 + ink[i] * 0.7;
-      // ink: subtract; fast particles bleed toward a rust red
-      buf8[j]     -= a * (205 - sp * 40);
-      buf8[j + 1] -= a * (210 + sp * 25);
-      buf8[j + 2] -= a * (205 + sp * 40);
+      // ink: subtract from the paper; fast particles bleed toward the palette's accent
+      buf8[j]     -= a * (s0 + (m0 - s0) * sp);
+      buf8[j + 1] -= a * (s1 + (m1 - s1) * sp);
+      buf8[j + 2] -= a * (s2 + (m2 - s2) * sp);
     }
     // hearts, in the same ink, fading as they rise
     for (const h of hearts) {

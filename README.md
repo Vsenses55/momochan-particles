@@ -21,7 +21,13 @@ An interactive series of ink drawings of a cat, each rebuilt from tens of thousa
 | Rest the cursor on her (or hold a finger) | She settles and purrs |
 | Brush past an ear | The ear twitches |
 
-The radius and strength sliders tune the force. The density slider (25–250%) rebuilds the drawing with fewer or more particles: low is a loose, airy scatter, and high gets close to the original pen drawing.
+The radius and strength sliders tune the force. The density slider (25–250%, default 190%) rebuilds the drawing with fewer or more particles: low is a loose, airy scatter, and high gets close to the original pen drawing.
+
+### Color and dust
+
+The **Color** swatches switch the ink and paper: Sumi (the default black ink, bleeding rust when stirred), Indigo, Vermilion, Sepia, Matcha and Plum. Each one is three colors in the `PALETTES` list in `index.html` (paper, ink at rest, and the color moving ink bleeds toward), so it's easy to add your own.
+
+**Dust** toggles a sparse layer of faint ink motes drifting over the paper. It reacts to the cursor and Scatter like the drawings do.
 
 ## Run locally
 
