@@ -94,6 +94,10 @@
     { src: 'assets/cat-03.jpg', glyphs: ['懐', '疑'], reading: 'kaigi · skeptical', gamma: 1.35, density: 1.6, glyphSize: 0.22, glyphY: 0.5,
       eyes: [{ u: .44, v: .241, rx: .052, ry: .02 }, { u: .672, v: .248, rx: .05, ry: .02 }],
       ears: [{ pu: .35, pv: .13, tu: .31, tv: .018, w: .075 }, { pu: .77, pv: .13, tu: .875, tv: .072, w: .07 }] },
+    { src: 'assets/cat-04.jpg', glyphs: ['不', '安'], reading: 'fuan · uneasy', gamma: 1.5, density: 1.7, glyphSize: 0.22, glyphY: 0.5, glyphNudge: 0.1,
+      eyes: [{ u: .24, v: .465, rx: .022, ry: .024, tilt: 25 }, { u: .418, v: .479, rx: .044, ry: .022, tilt: -12 }],
+      ears: [{ pu: .26, pv: .19, tu: .19, tv: .03, w: .07 }, { pu: .62, pv: .18, tu: .795, tv: .062, w: .07 }],
+      sway: [{ pu: .475, pv: .605, tu: .49, tv: .69, w: .055, taper: 0, curl: 0.5, amp: 0.12, speed: 1.6 }] },
   ];
   scenes.forEach(sc => { sc.im = new Image(); sc.im.src = sc.src; });
   let cur = 0, img = scenes[0].im;
@@ -655,7 +659,7 @@
   scenes[0].im.onload = async () => {
     try {
       await Promise.race([
-        Promise.all([document.fonts.load('900 100px "WordFace"', '希望愛懐疑'), document.fonts.load('900 100px "Noto Sans JP"', '希望愛懐疑')]),
+        Promise.all([document.fonts.load('900 100px "WordFace"', '希望愛懐疑不安'), document.fonts.load('900 100px "Noto Sans JP"', '希望愛懐疑不安')]),
         new Promise(r => setTimeout(r, 2500))
       ]);
     } catch (e) {}
